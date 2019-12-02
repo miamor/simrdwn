@@ -1,7 +1,7 @@
 GPU=1
 CUDNN=1
-OPENCV=1
-DEBUG=0
+OPENCV=0
+DEBUG=1
 
 # nvcc --version
 
@@ -72,13 +72,13 @@ all: obj results $(EXEC)
 
 
 $(EXEC): $(OBJS)
-	$(CC) $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CC) $^ -o $@ $(COMMON) $(CFLAGS) $(LDFLAGS)
 
 $(OBJDIR)%.o: %.c $(DEPS)
-	$(CC) $(COMMON) $(CFLAGS) -c $< -o $@
+	$(CC) -c $< -o $@ $(COMMON) $(CFLAGS)
 
 $(OBJDIR)%.o: %.cu $(DEPS)
-	$(NVCC) $(ARCH) $(COMMON) --compiler-options "$(CFLAGS)" -c $< -o $@
+	$(NVCC) $(ARCH) -c $< -o $@ $(COMMON) --compiler-options "$(CFLAGS)"
 
 obj:
 	mkdir -p obj

@@ -53,41 +53,28 @@ def slice_im(image_path, out_name, out_dir, sliceHeight=256, sliceWidth=256,
     None
     """
 
-    use_cv2 = True
-    # read in image, cv2 fails on large files
-    print("Read in image:", image_path)
-    try:
-        # convert to rgb (cv2 reads in bgr)
-        img_cv2 = cv2.imread(image_path, 1)
-        # print ("img_cv2.shape:", img_cv2.shape)
-        image0 = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB)
-    except:
-        image0 = skimage.io.imread(
-            image_path, as_grey=False).astype(np.uint8)  # [::-1]
-        use_cv2 = False
-    print("image.shape:", image0.shape)
-    # image0 = cv2.imread(image_path, 1)  # color
-
     if len(out_ext) == 0:
         ext = '.' + image_path.split('.')[-1]
     else:
         ext = out_ext
 
-    win_h, win_w = image0.shape[:2]
+    image = cv2.imread(image_path, 1)  # color
+    print("image.shape:", image.shape)
+
+    im_h, im_w = image.shape[:2]
+    win_size = sliceHeight*sliceWidth
 
     # if slice sizes are large than image, pad the edges
     pad = 0
-    if sliceHeight > win_h:
-        pad = sliceHeight - win_h
-    if sliceWidth > win_w:
-        pad = max(pad, sliceWidth - win_w)
+    if sliceHeight > im_h:
+        pad = sliceHeight - im_h
+    if sliceWidth > im_w:
+        pad = max(pad, sliceWidth - im_w)
     # pad the edge of the image with black pixels
     if pad > 0:
         border_color = (0, 0, 0)
-        image0 = cv2.copyMakeBorder(image0, pad, pad, pad, pad,
-                                    cv2.BORDER_CONSTANT, value=border_color)
-
-    win_size = sliceHeight*sliceWidth
+        image = cv2.copyMakeBorder(image, pad, pad, pad, pad,
+                                   cv2.BORDER_CONSTANT, value=border_color)
 
     t0 = time.time()
     n_ims = 0
@@ -95,68 +82,60 @@ def slice_im(image_path, out_name, out_dir, sliceHeight=256, sliceWidth=256,
     dx = int((1. - overlap) * sliceWidth)
     dy = int((1. - overlap) * sliceHeight)
 
-    # for y0 in xrange(0, image0.shape[0], dy):#sliceHeight):
-    #    for x0 in xrange(0, image0.shape[1], dx):#sliceWidth):
-    for y0 in range(0, image0.shape[0], dy):  # sliceHeight):
-        for x0 in range(0, image0.shape[1], dx):  # sliceWidth):
+    print('overlap', overlap)
+    print('dx', dx)
+    print('dy', dy)
+    print('pad', pad)
+
+    for y in range(0, im_h, dy):  # sliceHeight):
+        for x in range(0, im_w, dx):  # sliceWidth):
             n_ims += 1
 
             if (n_ims % 50) == 0:
                 print(n_ims)
 
-            # make sure we don't have a tiny image on the edge
-            if y0+sliceHeight > image0.shape[0]:
-                y = image0.shape[0] - sliceHeight
-            else:
-                y = y0
-            if x0+sliceWidth > image0.shape[1]:
-                x = image0.shape[1] - sliceWidth
-            else:
-                x = x0
-
             # extract image
-            window_c = image0[y:y + sliceHeight, x:x + sliceWidth]
-            # get black and white image
-            if use_cv2:
-                window = cv2.cvtColor(window_c, cv2.COLOR_BGR2GRAY)
+            # make sure we don't go past the edge of the image
+            if y + sliceHeight > im_h:
+                y0 = im_h - sliceHeight
             else:
-                window = cv2.cvtColor(window_c, cv2.COLOR_RGB2GRAY)
+                y0 = y
+            if x + sliceWidth > im_w:
+                x0 = im_w - sliceWidth
+            else:
+                x0 = x
 
-            # find threshold that's not black
+            window_c = image[y0:y0 + sliceHeight, x0:x0 + sliceWidth]
+            win_h, win_w = window_c.shape[:2]
+
+            # get black and white image
+            window = cv2.cvtColor(window_c, cv2.COLOR_BGR2GRAY)
+
+            # find threshold of image that's not black
             # https://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_imgproc/py_thresholding/py_thresholding.html?highlight=threshold
             ret, thresh1 = cv2.threshold(window, 2, 255, cv2.THRESH_BINARY)
             non_zero_counts = cv2.countNonZero(thresh1)
             zero_counts = win_size - non_zero_counts
             zero_frac = float(zero_counts) / win_size
-            # print "zero_frac", zero_fra
+            # print ("zero_frac", zero_fra
             # skip if image is mostly empty
             if zero_frac >= zero_frac_thresh:
                 if verbose:
                     print("Zero frac too high at:", zero_frac)
                 continue
-            # else save
-            else:
-                # outpath = os.path.join(out_dir, out_name + \
-                # '|' + str(y) + '_' + str(x) + '_' + str(sliceHeight) + '_' + str(sliceWidth) +\
-                # '_' + str(pad) + ext)
-                outpath = os.path.join(
+
+            #  save
+            outpath = os.path.join(
                     out_dir,
-                    out_name + slice_sep + str(y) + '_' + str(x) + '_'
-                    + str(sliceHeight) + '_' + str(sliceWidth)
-                    + '_' + str(pad) + '_' + str(win_w) + '_' + str(win_h)
+                    out_name + slice_sep + str(y0) + '_' + str(x0)
+                    + '_' + str(sliceHeight) + '_' + str(sliceWidth)
+                    + '_' + str(pad)
+                    + '_' + str(im_w) + '_' + str(im_h)
                     + ext)
 
-                # outpath = os.path.join(out_dir, 'slice_' + out_name + \
-                # '_' + str(y) + '_' + str(x) + '_' + str(sliceHeight) + '_' + str(sliceWidth) +\
-                # '_' + str(pad) + '.jpg')
-                if verbose:
-                    print("outpath:", outpath)
-                # if large image, convert to bgr prior to saving
-                if not use_cv2:
-                    skimage.io.imsave(outpath, window_c)
-                else:
-                    cv2.imwrite(outpath, window_c)
-                n_ims_nonull += 1
+            cv2.imwrite(outpath, window_c)
+
+            n_ims_nonull += 1
 
     print("Num slices:", n_ims, "Num non-null slices:", n_ims_nonull,
           "sliceHeight", sliceHeight, "sliceWidth", sliceWidth)

@@ -11,14 +11,14 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-// // AVE
-// #ifdef OPENCV
-// #include "opencv2/highgui/highgui_c.h"
-// #include "opencv2/imgproc/imgproc_c.h"
-// // add the videoio_c.h, according to:
-// //	https://github.com/pjreddie/darknet/pull/38/files
-// //#include "opencv2/videoio/videoio_c.h"
-// #endif
+// AVE
+#ifdef OPENCV
+#include "opencv2/highgui/highgui_c.h"
+#include "opencv2/imgproc/imgproc_c.h"
+// add the videoio_c.h, according to:
+//	https://github.com/pjreddie/darknet/pull/38/files
+#include "opencv2/videoio/videoio_c.h"
+#endif
 
 int windows = 0;
 

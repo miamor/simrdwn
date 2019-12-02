@@ -23,7 +23,7 @@
 #include "opencv2/imgproc/imgproc_c.h"
 // add the videoio_c.h, according to:
 //	https://github.com/pjreddie/darknet/pull/38/files
-//#include "opencv2/videoio/videoio_c.h"
+#include "opencv2/videoio/videoio_c.h"
 #endif
 
 

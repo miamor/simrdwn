@@ -1,8 +1,8 @@
 GPU=1
 CUDNN=1
-OPENCV=1
+OPENCV=0
 OPENMP=0
-DEBUG=0
+DEBUG=1
 
 # nvcc --version
 
@@ -42,7 +42,9 @@ ARFLAGS=rcs
 OPTS=-Ofast
 LDFLAGS= -lm -pthread 
 COMMON= -Iinclude/ -Isrc/
-CFLAGS=-Wall -Wno-unused-result -Wno-unknown-pragmas -Wfatal-errors -fPIC
+# COMMON=-I/Users/avanetten/anaconda/pkgs/libgdal-2.1.0-0/include
+#CFLAGS=-Wall -Wno-unused-result -Wno-unknown-pragmas -Wfatal-errors -fPIC
+CFLAGS=-Wall -Wfatal-errors -fPIC 
 
 ifeq ($(OPENMP), 1) 
 CFLAGS+= -fopenmp

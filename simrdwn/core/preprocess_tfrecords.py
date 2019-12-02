@@ -241,7 +241,12 @@ def yolt_to_tf_example(image_file, label_file,
                 cat_int_out = cat_int
             # cd dlabel_map_dict[obj['name']])
             classes.append(int(cat_int_out))
+            print('row', row)
+            print('cat_int', cat_int)
+            # print('convert_dict', convert_dict)
             # obj['name'].encode('utf8'))
+            print('cat_int_out', cat_int_out)
+            print('label_map_dict', label_map_dict)
             classes_text.append(label_map_dict[cat_int_out].encode())
             # classes_text.append(label_map_dict[cat_int_out]) #obj['name'].encode('utf8'))
             # truncated.append(0) #int(obj['truncated']))
@@ -346,7 +351,7 @@ def yolt_dir_to_tf(image_dir, label_map_dict, TF_RecordPath,  # cat_int_plus=1,
     for image_file in image_files:
         image_file_full = os.path.join(image_dir, image_file)
         label_file_full = image_file_full.split(
-            '.')[0].replace('images', 'labels') + '.txt'
+            '.')[0].replace('images', 'labels_yolo') + '.txt'
         tf_example = yolt_to_tf_example(image_file_full, label_file_full,
                                         label_map_dict,
                                         # cat_int_plus=cat_int_plus,
@@ -386,7 +391,7 @@ def yolt_imlist_to_tf(image_list_file, label_map_dict, TF_RecordPath,
             print("  os.path.exists(image_file?",
                   os.path.exists(image_file_full))
         label_file_full = image_file_full.split(
-            '.')[0].replace('images', 'labels') + '.txt'
+            '.')[0].replace('images', 'labels_yolo') + '.txt'
         if not os.path.exists(label_file_full):
             label_file_full = ''
         tf_example = yolt_to_tf_example(image_file_full, label_file_full,

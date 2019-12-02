@@ -225,6 +225,7 @@ def add_geo_coords_to_df(df_, inProj_str='epsg:4326', outProj_str='epsg:3857',
 
     # update dataframe
     # [lon0, lat0, lon1, lat1, x0_wmp, y0_wmp, x1_wmp, y1_wmp]
+    # print('out_arr', out_arr)
     out_arr = np.array(out_arr)
     df_['lon0'] = out_arr[:, 0]
     df_['lat0'] = out_arr[:, 1]

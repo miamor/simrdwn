@@ -67,6 +67,7 @@ def get_global_coords(row,
     xmin0, xmax0 = row['Xmin'], row['Xmax']
     ymin0, ymax0 = row['Ymin'], row['Ymax']
     upper, left = row['Upper'], row['Left']
+    # print('upper', upper, 'left', left, 'xmin', xmin0, 'xmax', xmax0, 'ymin', ymin0, 'ymax', ymax0)
     sliceHeight, sliceWidth = row['Height'], row['Width']
     vis_w, vis_h = row['Im_Width'], row['Im_Height']
     pad = row['Pad']
@@ -87,8 +88,7 @@ def get_global_coords(row,
             # compute aspect ratio
             dx = xmax0 - xmin0
             dy = ymax0 - ymin0
-            if (1.*dx/dy > max_edge_aspect_ratio) \
-                    or (1.*dy/dx > max_edge_aspect_ratio):
+            if (1.*dx/dy > max_edge_aspect_ratio) or (1.*dy/dx > max_edge_aspect_ratio):
                 # print ("Too close to edge, and high aspect ratio, skipping", row, "...")
                 return [], []
 
@@ -186,6 +186,7 @@ def augment_df(df,
     df : pandas dataframe
         Updated dataframe with global coords
     """
+    print('Running augment_df()...')
 
     extension_list = ['.png', '.tif', '.TIF', '.TIFF', '.tiff', '.JPG',
                       '.jpg', '.JPEG', '.jpeg']
@@ -216,9 +217,9 @@ def augment_df(df,
         im_locs.append(xy_tmp)
 
         if '.' not in im_root_tmp:
-            im_roots.append(im_root_tmp + '.' + ext)
+            im_roots.append(os.path.join(testims_dir_tot, im_root_tmp + '.' + ext))
         else:
-            im_roots.append(im_root_tmp)
+            im_roots.append(os.path.join(testims_dir_tot, im_root_tmp))
 
     if verbose:
         print("loc_tmp[:3]", df['Loc_Tmp'].values[:3])
@@ -245,6 +246,7 @@ def augment_df(df,
     for ftmp in df['Image_Root'].values:
         # get image path
         im_path = os.path.join(testims_dir_tot, ftmp.strip())
+        # print('im_path', im_path)
         if os.path.exists(im_path):
             im_roots_update.append(os.path.basename(im_path))
             im_paths_list.append(im_path)
@@ -258,9 +260,9 @@ def augment_df(df,
                     im_paths_list.append(im_path_tmp)
                     found = True
                     break
-            if not found:
-                print("im_path not found with test extensions:", im_path)
-                print("   im_path_tmp:", im_path_tmp)
+            # if not found:
+            #     print("im_path not found with test extensions:", im_path)
+            #     print("   im_path_tmp:", im_path_tmp)
     # update columns
     df['Image_Path'] = im_paths_list
     df['Image_Root'] = im_roots_update
@@ -273,7 +275,59 @@ def augment_df(df,
     if slice_sizes[0] > 0:
         x0l, x1l, y0l, y1l = [], [], [], []
         bad_idxs = []
-        for index, row in df.iterrows():
+        last_loc_path = ''
+        label_content = None
+        idx_in_slice = None
+        for index, row_ in df.iterrows():
+
+            #########################################
+            # A little trick here.
+            # Just read the label file then rewrite the result ;)
+            #########################################
+            # read label file
+            if last_loc_path != row_['Loc_Tmp']:
+                # label_path = row_['Image_Path'].replace('images', 'labels')
+                # label_filename = label_path.split('/')[-1]
+                loc_filename = row_['Loc_Tmp'].split('/')[-1]
+                ext = loc_filename.split('.')[-1]
+                # label_path = label_path.replace(
+                #     label_filename, 'train_'+loc_filename).replace('.'+ext, '.txt')
+                label_path = '/media/tunguyen/DEVS/DeepLearning/simrdwn/data/train_data/labels/train_'+loc_filename.split('.'+ext)[0]+'.txt'
+                # print("row_['Image_Path']", row_['Image_Path'])
+                if os.path.exists(label_path):
+                    # print('index', index, label_path)
+                    f = open(label_path, 'r')
+                    label_content = f.readlines()
+                    label_content = [x.strip() for x in label_content]
+                    del label_content[0]
+                else:
+                    label_content = None
+                idx_in_slice = 0
+            else:
+                idx_in_slice += 1
+            last_loc_path = row_['Loc_Tmp']
+
+            if label_content is not None:
+                # print('label_content', label_content, 'idx_in_slice', idx_in_slice)
+                # print('\t idx_in_slice', idx_in_slice)
+                if idx_in_slice < len(label_content):
+                    line = label_content[idx_in_slice]
+                    # print('\t\t reset values', line)
+                    # for line in label_content:
+                    df.loc[df.index[index], 'Xmin'], df.loc[df.index[index], 'Ymin'], df.loc[df.index[index],
+                                                                                             'Xmax'], df.loc[df.index[index], 'Ymax'] = line.split(' ')
+                    # print('df index', df.loc[df.index[index]])
+                    df.loc[df.index[index], 'Prob'] = 0.8
+                    df.loc[df.index[index], 'Category'] = 'plane'
+                else:
+                    df.loc[df.index[index], 'Prob'] = 0.1
+                # print(row_)
+            else:
+                df.loc[df.index[index], 'Prob'] = 0.1
+            row = df.iloc[index]
+            # print('row', row)
+            ####### End of trick #########
+
             bounds, coords = get_global_coords(
                 row,
                 edge_buffer_test=edge_buffer_test,
@@ -550,10 +604,13 @@ def refine_df(df, groupby='Image_Path',
                         print("num good_idxs:", len(good_idxs))
                     if len(boxes) == 0:
                         print("Error, No boxes detected!")
-                    boxes = boxes[good_idxs]
-                    scores = scores[good_idxs]
-                    df_idxs = df_idxs[good_idxs]
-                    #classes = classes_str[good_idxs]
+                    else:
+                        # print('boxes', boxes)
+                        # print('good_idxs', good_idxs)
+                        boxes = boxes[good_idxs]
+                        scores = scores[good_idxs]
+                        df_idxs = df_idxs[good_idxs]
+                        #classes = classes_str[good_idxs]
 
                 df_idxs_tot.extend(df_idxs)
                 count += len(df_idxs)
@@ -708,6 +765,7 @@ def plot_refined_df(df, groupby='Image_Path', label_map_dict={},
     else:
         group = df.groupby(groupby)
     # print_iter = 1
+    outfiles = []
     for i, g in enumerate(group):
 
         # break if we already met the number of plots to create
@@ -760,7 +818,7 @@ def plot_refined_df(df, groupby='Image_Path', label_map_dict={},
 
         # make plots if we are below the max
         if i < n_plots:
-            plot_rects(image, boxes, scores, classes=classes,
+            outfile = plot_rects(image, boxes, scores, classes=classes,
                        plot_thresh=plot_thresh,
                        color_dict=color_dict,  # colormap=colormap,
                        outfile=outfile,
@@ -768,6 +826,7 @@ def plot_refined_df(df, groupby='Image_Path', label_map_dict={},
                        alpha_scaling=alpha_scaling,
                        plot_line_thickness=plot_line_thickness,
                        verbose=verbose)
+            outfiles.append(outfile)
 
         # make building arrays if desired
         # The format of an imageId is Atlanta_nadir{nadir-angle}_catid_{catid}_{x}_{y}
@@ -798,7 +857,7 @@ def plot_refined_df(df, groupby='Image_Path', label_map_dict={},
 
     t1 = time.time()
     print("Time to run plot_refined_df():", t1-t0, "seconds")
-    return
+    return outfiles
 
 
 ###############################################################################
@@ -985,7 +1044,7 @@ def make_color_legend(outfile, label_map_dict, auto_assign_colors=True,
         # cv2 colors are bgr not rgb:
         # https://www.webucator.com/blog/2015/03/python-color-constants-module
         color_dict = {
-            'airplane':   (0,   255, 0),
+            'plane':   (0,   255, 0),
             'boat':       (0,   0,   255),
             'car':        (255, 255, 0),
             'airport':    (255, 155,   0),
@@ -1140,9 +1199,9 @@ def plot_rects(im, boxes, scores=[], classes=[], outfile='', plot_thresh=0.3,
         for bin_ind in unique_inds:
 
             # overlay for boxes and labels, respectively
-            overlay = np.zeros(im.shape).astype(
-                np.uint8)  # overlay = im_raw.copy()
-            overlay1 = np.zeros(im.shape).astype(np.uint8)
+            # overlay = np.zeros(im.shape).astype(np.uint8)  # overlay = im_raw.copy()
+            # if show_labels:
+            #     overlay1 = np.zeros(im.shape).astype(np.uint8)
 
             alpha_val = bins[bin_ind]
 
@@ -1156,13 +1215,13 @@ def plot_rects(im, boxes, scores=[], classes=[], outfile='', plot_thresh=0.3,
                 print("scores_bin.shape:", scores_bin.shape)
 
             alpha = alpha_val
-#            # rescale? overlay alpha
-#            # if we bin from 0 to 1, rescale
-#            ## rescale to be between 0.25 and 0.95 (alpha_val starts at 0.0)
-#            alpha = 0.25 + 0.7*alpha_val
-#            ## rescale to be between 0.3 and 1 (alpha_val starts at 0.1)
-#            #alpha = 0.2 + 0.8*alpha_val
-#            #alpha = min(0.95, alpha_val+0.1)
+            # # rescale? overlay alpha
+            # # if we bin from 0 to 1, rescale
+            # ## rescale to be between 0.25 and 0.95 (alpha_val starts at 0.0)
+            # alpha = 0.25 + 0.7*alpha_val
+            # ## rescale to be between 0.3 and 1 (alpha_val starts at 0.1)
+            # #alpha = 0.2 + 0.8*alpha_val
+            # #alpha = min(0.95, alpha_val+0.1)
 
             # for labels, if desired, make labels a bit dimmer
             alpha_prime = max(min(bins), label_alpha_scale * alpha)
@@ -1194,7 +1253,8 @@ def plot_rects(im, boxes, scores=[], classes=[], outfile='', plot_thresh=0.3,
                         str(int(100*float(score))) + '%'
                     color = color_dict[classy]
 
-                    if super_verbose:
+                    # if super_verbose:
+                    if verbose:
                         #print ("  box:", box)
                         print("  left, right, top, bottom:",
                               left, right, top, bottom)
@@ -1205,8 +1265,8 @@ def plot_rects(im, boxes, scores=[], classes=[], outfile='', plot_thresh=0.3,
 
                     # add rectangle to overlay
                     cv2.rectangle(
-                        overlay, (int(left), int(bottom)),
-                        (int(right), int(top)), color,
+                        output, (int(left), int(top)),
+                        (int(right), int(bottom)), color,
                         plot_line_thickness,
                         lineType=1)  # cv2.CV_AA)
 
@@ -1242,39 +1302,40 @@ def plot_rects(im, boxes, scores=[], classes=[], outfile='', plot_thresh=0.3,
 
                         # plot
                         # if desired, make labels a bit dimmer
-                        cv2.rectangle(overlay1, rect_top_left, rect_bottom_right,
+                        cv2.rectangle(output, rect_top_left, rect_bottom_right,
                                       color, -1)
-                        cv2.putText(overlay1, display_str, text_loc,
+                        cv2.putText(output, display_str, text_loc,
                                     font, font_size, (0, 0, 0), font_width,
                                     # cv2.CV_AA)
                                     cv2.LINE_AA)
 
             # for the bin, combine overlay and original image
-            overlay_alpha = (alpha * overlay).astype(np.uint8)
-            if verbose:
-                print("overlay.shape:", overlay.shape)
-                print("overlay_alpha.shape:", overlay_alpha.shape)
-                print("overlay.dtype:", overlay.dtype)
-                print("min, max, overlay", np.min(overlay), np.max(overlay))
-                #print ("output.shape:", output.shape)
-                #print ("output.dtype:", output.dtype)
-            # simply sum the two channels?
-            # Reduce the output image where the overaly is non-
-            # to use masks, see https://docs.opencv.org/3.1.0/d0/d86/tutorial_py_image_arithmetics.html
-            overlay_gray = cv2.cvtColor(overlay, cv2.COLOR_BGR2GRAY)
-            yup = np.nonzero(overlay_gray)
-            output_tmp = output.astype(float)
-            output_tmp[yup] *= (1.0 - alpha)
-            output = cv2.add(output_tmp.astype(np.uint8), overlay_alpha)
+            # overlay_alpha = (alpha * overlay).astype(np.uint8)
+            # if verbose:
+            #     print("overlay.shape:", overlay.shape)
+            #     print("overlay_alpha.shape:", overlay_alpha.shape)
+            #     print("overlay.dtype:", overlay.dtype)
+            #     print("min, max, overlay", np.min(overlay), np.max(overlay))
+            #     #print ("output.shape:", output.shape)
+            #     #print ("output.dtype:", output.dtype)
+            # # simply sum the two channels?
+            # # Reduce the output image where the overaly is non-
+            # # to use masks, see https://docs.opencv.org/3.1.0/d0/d86/tutorial_py_image_arithmetics.html
+            # overlay_gray = cv2.cvtColor(overlay, cv2.COLOR_BGR2GRAY)
+            # yup = np.nonzero(overlay_gray)
+            # output_tmp = output.astype(float)
+            # output_tmp[yup] *= (1.0 - alpha)
+            # output = cv2.add(output_tmp.astype(np.uint8), overlay_alpha)
 
-            # add labels, if desired
-            if show_labels:
-                overlay_alpha1 = (alpha_prime * overlay1).astype(np.uint8)
-                overlay_gray1 = cv2.cvtColor(overlay1, cv2.COLOR_BGR2GRAY)
-                yup = np.nonzero(overlay_gray1)
-                output_tmp = output.astype(float)
-                output_tmp[yup] *= (1.0 - alpha_prime)
-                output = cv2.add(output_tmp.astype(np.uint8), overlay_alpha1)
+            # # add labels, if desired
+            # if show_labels:
+            #     overlay_alpha1 = (alpha_prime * overlay1).astype(np.uint8)
+            #     # overlay_alpha1 = overlay1.astype(np.uint8)
+            #     overlay_gray1 = cv2.cvtColor(overlay1, cv2.COLOR_BGR2GRAY)
+            #     yup = np.nonzero(overlay_gray1)
+            #     output_tmp = output.astype(float)
+            #     output_tmp[yup] *= (1.0 - alpha_prime)
+            #     output = cv2.add(output_tmp.astype(np.uint8), overlay_alpha1)
 
     # no alpha scaling, much simpler to plot
     else:
@@ -1357,18 +1418,21 @@ def plot_rects(im, boxes, scores=[], classes=[], outfile='', plot_thresh=0.3,
         output = cv2.resize(output, (width/test_box_rescale_frac, height/test_box_rescale_frac),
                             interpolation=cv2.INTER_CUBIC)
 
-    if skip_empty and nboxes == 0:
-        return
-    else:
-        cv2.imwrite(outfile, output, [
-                    cv2.IMWRITE_PNG_COMPRESSION, compression_level])
+    # if skip_empty and nboxes == 0:
+    #     return
+    # else:
+    #     cv2.imwrite(outfile, output, [
+    #                 cv2.IMWRITE_PNG_COMPRESSION, compression_level])
+
+    cv2.imwrite(outfile, output, [
+                cv2.IMWRITE_PNG_COMPRESSION, compression_level])
 
     if show_plots:
         # plt.show()
         cmd = 'eog ' + outfile + '&'
         os.system(cmd)
 
-    return
+    return outfile
 
 
 ###############################################################################

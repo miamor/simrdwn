@@ -31,24 +31,24 @@ SIMRDWN is built to execute within a docker container on a GPU-enabled machine. 
  
 3. Build docker file.
 
-		cd /simrdwn/docker
-		nvidia-docker build --no-cache -t simrdwn .
-	
+        cd /simrdwn/docker
+        nvidia-docker build --no-cache -t simrdwn .
+    
 4. Spin up the docker container (see the [docker docs](https://docs.docker.com/engine/reference/commandline/run/) for options) 
 
         nvidia-docker run -it -v /simrdwn:/simrdwn --name simrdwn_container0 simrdwn
-	
+    
 5. Compile the Darknet C program for both YOLT2 and YOLT3.
       
-	    cd /simrdwn/yolt2
-	    make
-	    cd /simrdwn/yolt3
-	    make
+        cd /simrdwn/yolt2
+        make
+        cd /simrdwn/yolt3
+        make
 
 6. Get help on SIMRDWN options
-	
-		python /simrdwn/simrdwn/core/simrdwn.py --help
-	
+    
+        python /simrdwn/simrdwn/core/simrdwn.py --help
+    
 
 ____
 
@@ -66,13 +66,13 @@ Where x, y, width, and height are relative to the image's width and height.  Run
 
 ####  1B. Create .tfrecord (optional)
 If the tensorflow object detection API models are being run, we must transform the training data into the .tfrecord format.  This is accomplished via the _simrdwn/core/preprocess\_tfrecords.py_ script.
-	
-	python /simrdwn/core/preprocess_tfrecords.py \
-	    --image_list_file /simrdwn/data/cowc_labels_car_list.txt \
-	    --pbtxt_filename /simrdwn/data/class_labels_car.pbtxt \
-	    --outfile /simrdwn/data/cowc_labels_car_train.tfrecord \
-	    --outfile_val /simrdwn/data/cowc_labels_car_val.tfrecord \
-	    --val_frac 0.1
+    
+    python /simrdwn/core/preprocess_tfrecords.py \
+        --image_list_file /simrdwn/data/cowc_labels_car_list.txt \
+        --pbtxt_filename /simrdwn/data/class_labels_car.pbtxt \
+        --outfile /simrdwn/data/cowc_labels_car_train.tfrecord \
+        --outfile_val /simrdwn/data/cowc_labels_car_val.tfrecord \
+        --val_frac 0.1
 
 ____
 
@@ -81,29 +81,27 @@ ____
 We can train either YOLT models or tensorflow object detection API models.  If we are using tensorflow, the config file may need to be updated in the _/simrdwn/configs_ directory (further example config files reside [here](https://github.com/tensorflow/models/tree/master/research/object_detection/samples/configs)).
 Training can be run with commands such as:
 
-	# SSD vehicle search
-	python /simrdwn/core/simrdwn.py \
-		--framework ssd \
-		--mode train \
-		--outname inception_v2_cowc \
-		--label_map_path /simrdwn/data/class_labels_car.pbtxt \
-		--tf_cfg_train_file _altered_v0/ssd_inception_v2_simrdwn.config \
-		--train_tf_record cowc/cowc_train.tfrecord \
-		--max_batches 30000 \
-		--batch_size 16 
-	
-	# YOLT vechicle search
-	python /simrdwn/core/simrdwn.py \
-		--framework yolt2 \
-		--mode train \
-		--outname dense_cars \
-		--yolt_cfg_file ave_dense.cfg  \
-		--weight_file yolo.weights \
-		--yolt_train_images_list_file cowc_yolt_train_list.txt \
-		--label_map_path class_labels_car.pbtxt \
-		--max_batches 30000 \
-		--batch_size 64 \
-		--subdivisions 16
+    # SSD vehicle search
+    python3 simrdwn/core/simrdwn.py  --mode train \
+        --framework ssd \
+        --outname inception_v2_cowc \
+        --label_map_path /simrdwn/data/class_labels_car.pbtxt \
+        --tf_cfg_train_file _altered_v0/ssd_inception_v2_simrdwn.config \
+        --train_tf_record cowc/cowc_train.tfrecord \
+        --max_batches 30000 \
+        --batch_size 16 
+    
+    # YOLT vechicle search
+    python3 simrdwn/core/simrdwn.py  --mode train \
+        --framework yolt2 \
+        --outname dense_cars \
+        --yolt_cfg_file ave_dense.cfg  \
+        --weight_file yolo.weights \
+        --yolt_train_images_list_file cowc_yolt_train_list.txt \
+        --label_map_path class_labels_car.pbtxt \
+        --max_batches 30000 \
+        --batch_size 64 \
+        --subdivisions 16
 
 ____
 
@@ -111,62 +109,62 @@ ____
 
 During the test phase, input images of arbitrary size are processed.  
 
-1.	Slice test images into the window size used in training.
+1.    Slice test images into the window size used in training.
 2.  Run inference on windows with the desired model
 3.  Stitch windows back together to create original test image
 4.  Run non-max suppression on overlapping predictions
 5.  Make plots of predictions (optional)
 
-	
-	
-		# SSD vehicle search
-		python /raid/local/src/simrdwn/src/simrdwn.py \
-			--framework ssd \
-			--mode test \
-			--outname inception_v2_cowc \
-			--label_map_path class_labels_car.pbtxt \
-			--train_model_path [ssd_train_path] \
-			--tf_cfg_train_file ssd_inception_v2_simrdwn.config \
-			--use_tfrecords=0 \
-			--testims_dir cowc/Utah_AGRC  \
-			--keep_test_slices 0 \
-			--test_slice_sep __ \
-			--test_make_legend_and_title 0 \
-			--edge_buffer_test 1 \
-			--test_box_rescale_frac 1 \
-			--plot_thresh_str 0.2 \
-			--slice_sizes_str 416 \
-			--slice_overlap 0.2 \
-			--alpha_scaling 1 \
-			--show_labels 0
-				
-		# YOLT vehicle search
-		python /raid/local/src/simrdwn/core/simrdwn.py \
-			--framework yolt2 \
-			--mode test \
-			--outname dense_cowc \
-			--label_map_path class_labels_car.pbtxt \
-			--train_model_path [yolt2_train_path] \
-			--weight_file ave_dense_final.weights \
-			--yolt_cfg_file ave_dense.cfg \
-			--testims_dir cowc/Utah_AGRC  \
-			--keep_test_slices 0 \
-			--test_slice_sep __ \
-			--test_make_legend_and_title 0 \
-			--edge_buffer_test 1 \
-			--test_box_rescale_frac 1 \
-			--plot_thresh_str 0.2 \
-			--slice_sizes_str 416 \
-			--slice_overlap 0.2 \
-			--alpha_scaling 1 \
-			--show_labels 1
-	
-	Outputs will be something akin to the images below.  The _alpha\_scaling_ flag makes the bounding box opacity proportional to prediction confidence, and the _show\_labels_ flag prints the object class at the top of the bounding box.
-	![Alt text](/results/__examples/ex0.png?raw=true "Figure 1")
-	![Alt text](/results/__examples/ex1.png?raw=true "Figure 2")
-	
-	
-	
+    
+    
+        # SSD vehicle search
+        python3 simrdwn/src/simrdwn.py  --mode test \
+            --framework ssd \
+            --nms_overlap_thresh 0.7 \
+            --outname inception_v2_cowc \
+            --label_map_path class_labels_car.pbtxt \
+            --train_model_path [ssd_train_path] \
+            --tf_cfg_train_file ssd_inception_v2_simrdwn.config \
+            --use_tfrecords=0 \
+            --testims_dir cowc/Utah_AGRC  \
+            --keep_test_slices 0 \
+            --test_slice_sep __ \
+            --test_make_legend_and_title 0 \
+            --edge_buffer_test 1 \
+            --test_box_rescale_frac 1 \
+            --plot_thresh_str 0.2 \
+            --slice_sizes_str 416 \
+            --slice_overlap 0.2 \
+            --alpha_scaling 1 \
+            --show_labels 0
+                
+        # YOLT vehicle search
+        python3 simrdwn/core/simrdwn.py  --mode test \
+            --framework yolt2 \
+            --nms_overlap_thresh 0.7 \
+            --outname dense_cowc \
+            --label_map_path class_labels_car.pbtxt \
+            --train_model_path [yolt2_train_path] \
+            --weight_file ave_dense_final.weights \
+            --yolt_cfg_file ave_dense.cfg \
+            --testims_dir cowc/Utah_AGRC  \
+            --keep_test_slices 0 \
+            --test_slice_sep __ \
+            --test_make_legend_and_title 0 \
+            --edge_buffer_test 1 \
+            --test_box_rescale_frac 1 \
+            --plot_thresh_str 0.2 \
+            --slice_sizes_str 416 \
+            --slice_overlap 0.2 \
+            --alpha_scaling 1 \
+            --show_labels 1
+    
+    Outputs will be something akin to the images below.  The _alpha\_scaling_ flag makes the bounding box opacity proportional to prediction confidence, and the _show\_labels_ flag prints the object class at the top of the bounding box.
+    ![Alt text](/results/__examples/ex0.png?raw=true "Figure 1")
+    ![Alt text](/results/__examples/ex1.png?raw=true "Figure 2")
+    
+    
+    
 _If you plan on using SIMRDWN in your work, please consider citing [YOLO](https://arxiv.org/abs/1612.08242), the [TensorFlow Object Detection API](https://arxiv.org/abs/1611.10012), [YOLT](https://arxiv.org/abs/1805.09512), and [SIMRDWN](https://arxiv.org/abs/1809.09978)._
 
 

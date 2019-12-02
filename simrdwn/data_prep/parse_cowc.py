@@ -23,6 +23,8 @@ import os
 # import sys
 # path_simrdwn_core = os.path.dirname(os.path.realpath(__file__))
 # sys.path.append(path_simrdwn_core)
+# import simrdwn.data_prep.yolt_data_prep_funcs as yolt_data_prep_funcs
+
 import yolt_data_prep_funcs
 
 ###############################################################################
@@ -252,6 +254,8 @@ def slice_im_cowc(input_im, input_mask, outname_root, outdir_im, outdir_label,
     Slice large satellite image into smaller pieces,
     ignore slices with a percentage null greater then zero_fract_thresh'''
 
+    ext = '.' + input_im.split('.')[-1]
+
     image = cv2.imread(input_im, 1)  # color
     gt_image = cv2.imread(input_mask, 0)
     category_num = classes_dic[category]
@@ -318,10 +322,11 @@ def slice_im_cowc(input_im, input_mask, outname_root, outdir_im, outdir_label,
                 continue
 
             #  save
-            outname_part = 'slice_' + outname_root + \
+            outname_part = outname_root + '_' + \
                 '_' + str(y0) + '_' + str(x0) + \
-                '_' + str(win_h) + '_' + str(win_w) + \
-                '_' + str(pad)
+                '_' + str(sliceHeight) + '_' + str(sliceWidth) + \
+                '_' + str(pad) + \
+                '_' + str(im_w) + '_' + str(im_h)
             outname_im = os.path.join(outdir_im, outname_part + '.png')
             txt_outpath = os.path.join(outdir_label, outname_part + '.txt')
 
@@ -363,6 +368,108 @@ def slice_im_cowc(input_im, input_mask, outname_root, outdir_im, outdir_label,
     return
 
 
+def slice_im_no_mask(input_im, outname_root, outdir_im, outdir_label,
+                  classes_dic, category, yolt_box_size,
+                  sliceHeight=256, sliceWidth=256,
+                  zero_frac_thresh=0.2, overlap=0.2, pad=0, verbose=False,
+                  box_coords_dir='', yolt_coords_dir=''):
+    '''
+    ADAPTED FROM YOLT/SCRIPTS/SLICE_IM.PY
+    Assume input_im is rgb
+    Slice large satellite image into smaller pieces,
+    ignore slices with a percentage null greater then zero_fract_thresh'''
+
+    ext = '.' + input_im.split('.')[-1]
+    
+    image = cv2.imread(input_im, 1)  # color
+    # category_num = classes_dic[category]
+    print("image.shape:", image.shape)
+
+    im_h, im_w = image.shape[:2]
+    win_size = sliceHeight*sliceWidth
+
+    # if slice sizes are large than image, pad the edges
+    if sliceHeight > im_h:
+        pad = sliceHeight - im_h
+    if sliceWidth > im_w:
+        pad = max(pad, sliceWidth - im_w)
+    # pad the edge of the image with black pixels
+    if pad > 0:
+        border_color = (0, 0, 0)
+        image = cv2.copyMakeBorder(image, pad, pad, pad, pad,
+                                   cv2.BORDER_CONSTANT, value=border_color)
+
+    t0 = time.time()
+    n_ims = 0
+    n_ims_nonull = 0
+    dx = int((1. - overlap) * sliceWidth)
+    dy = int((1. - overlap) * sliceHeight)
+
+    print('overlap', overlap)
+    print('dx', dx)
+    print('dy', dy)
+    print('pad', pad)
+
+    for y in range(0, im_h, dy):  # sliceHeight):
+        for x in range(0, im_w, dx):  # sliceWidth):
+            n_ims += 1
+
+            if (n_ims % 50) == 0:
+                print(n_ims)
+
+            # extract image
+            # make sure we don't go past the edge of the image
+            if y + sliceHeight > im_h:
+                y0 = im_h - sliceHeight
+            else:
+                y0 = y
+            if x + sliceWidth > im_w:
+                x0 = im_w - sliceWidth
+            else:
+                x0 = x
+
+            window_c = image[y0:y0 + sliceHeight, x0:x0 + sliceWidth]
+            win_h, win_w = window_c.shape[:2]
+
+            # get black and white image
+            window = cv2.cvtColor(window_c, cv2.COLOR_BGR2GRAY)
+
+            # find threshold of image that's not black
+            # https://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_imgproc/py_thresholding/py_thresholding.html?highlight=threshold
+            ret, thresh1 = cv2.threshold(window, 2, 255, cv2.THRESH_BINARY)
+            non_zero_counts = cv2.countNonZero(thresh1)
+            zero_counts = win_size - non_zero_counts
+            zero_frac = float(zero_counts) / win_size
+            # print ("zero_frac", zero_fra
+            # skip if image is mostly empty
+            if zero_frac >= zero_frac_thresh:
+                if verbose:
+                    print("Zero frac too high at:", zero_frac)
+                continue
+
+            #  save
+            outname_part = outname_root + '_' + \
+                '_' + str(y0) + '_' + str(x0) + \
+                '_' + str(sliceHeight) + '_' + str(sliceWidth) + \
+                '_' + str(pad) + \
+                '_' + str(im_w) + '_' + str(im_h)
+            outname_im = os.path.join(outdir_im, outname_part + '.png')
+            # txt_outpath = os.path.join(outdir_label, outname_part + '.txt')
+
+            # save yolt ims
+            if verbose:
+                print("image output:", outname_im)
+            cv2.imwrite(outname_im, window_c)
+
+            n_ims_nonull += 1
+
+    print("Num slices:", n_ims, "Num non-null slices:", n_ims_nonull,
+          "sliceHeight", sliceHeight, "sliceWidth", sliceWidth)
+    print("Time to slice", input_im, time.time()-t0, "seconds")
+
+    return
+
+
 ###############################################################################
 def plot_gt_boxes(im_file, label_file, yolt_box_size,
                   figsize=(10, 10), color=(0, 0, 255), thickness=2):
@@ -391,7 +498,7 @@ def main():
     # general settings
     parser.add_argument('--truth_dir', type=str, default='/Users/avanetten/Documents/cosmiq/cowc/datasets/ground_truth_sets/Utah_AGRC',
                         help="Location of  ground truth labels")
-    parser.add_argument('--simrdwn_data_dir', type=str, default='/cosmiq/simrdwn/data/',
+    parser.add_argument('--simrdwn_data_dir', type=str, default='data/',
                         help="Location of  ground truth labels")
     parser.add_argument('--image_dir', type=str, default='',
                         help="Location of  images, look in truth dir if == ''")
